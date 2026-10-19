@@ -1,145 +1,122 @@
+# Stock Control API
 
-# 📦 Controle de Estoque - API (PT-BR)
+**English** · [Português](readme-PT-BR.md)
 
-## 📜 Descrição
+Multi-tenant REST API for inventory management. Each company (organization) gets its own users, products and warehouses, and stock levels are derived from a ledger of entry/exit movements rather than stored as a mutable counter.
 
-Esta API foi desenvolvida para gerenciar o controle de estoque de produtos. Ela permite:
-
-- ✅ Criar e gerenciar usuários.  
-- ✅ Gerenciar produtos.  
-- ✅ Registrar movimentações de entrada e saída no estoque.  
-- ✅ Separar dados por organização (empresa).  
+**Stack:** Node.js · Express · Sequelize · PostgreSQL (MySQL / SQL Server drivers included) · JWT · bcrypt
 
 ---
 
-## 📁 Estrutura do Projeto
+## What it does
 
-O projeto segue uma estrutura modular para facilitar a manutenção e expansão.
+- **Self-service onboarding** — creating an organization automatically provisions its first `admin` user with a randomly generated password, returned once in the response.
+- **Role-based access** — two roles, `admin` and `employee`. Admins manage users and the organization; both roles operate products, inventories and movements.
+- **Tenant scoping** — the `organization_id` comes from the JWT, not from the request body, so product, inventory and user queries are filtered by the caller's company.
+- **Movement ledger** — every stock change is recorded as an `in` or `out` movement tied to a product, an inventory and the user who made it. Querying an inventory returns its current balance per product, computed from that history.
 
-### 📂 Diretórios e Arquivos Principais
+## Design decisions
 
-**`src/api`** - Contém os controladores da API.  
-- `inventory.js`: Lida com operações relacionadas ao estoque.  
-- `inventoryMovement.js`: Gerencia movimentações de produtos.  
-- `organization.js`: Gerencia dados das organizações (empresas).  
-- `products.js`: Gerencia o cadastro e consulta de produtos.  
-- `user.js`: Gerencia o cadastro e autenticação de usuários.  
+| Decision | Why | Trade-off |
+| --- | --- | --- |
+| Stock balance is computed from movements (`src/fns/get-product-movements.js`) | Full audit trail: you always know who moved what, and the balance can't drift from the history | Balance is recalculated on every read — fine at small scale, would need a snapshot/materialized total for large ledgers |
+| Tenant ID taken from the token | A client cannot ask for another company's data just by changing a field in the body | Every service method must remember to filter by it (see *Known limitations*) |
+| Layered structure: `route → api → service → model` | Routes only wire middleware, controllers handle HTTP, services hold business rules | More files per entity than a flat Express app |
+| Random admin password on organization creation | No default credentials ever exist | Password is shown only once; there is no reset flow yet |
+| Passwords hashed with bcrypt (cost 12); JWT expires in 1 hour | Standard, slow-hash storage and short-lived tokens | No refresh token — the client must log in again |
 
-**`src/fns`** - Contém funções utilitárias reutilizáveis.  
+## Data model
 
-**`src/middleware`** - Contém middlewares da API.  
-- `auth.js`: Middleware de autenticação para acesso seguro.  
-
-**`src/model`** - Define os modelos de dados usados na API.  
-- `inventory.js`: Modelo para dados de estoque.  
-- `inventoryMovement.js`: Modelo para movimentações de estoque.  
-- `organization.js`: Modelo para organizações (empresas).  
-- `products.js`: Modelo para produtos.  
-- `user.js`: Modelo para usuários.  
-
-**`src/route`** - Define as rotas da API.  
-- `inventory.js`: Rotas do estoque.  
-- `inventoryMovement.js`: Rotas das movimentações de produtos.  
-- `organization.js`: Rotas das organizações.  
-- `products.js`: Rotas dos produtos.  
-- `user.js`: Rotas dos usuários.  
-
-**`src/service`** - Contém serviços da API.  
-- `database.js`: Configuração e conexão com o banco de dados.  
-
-**Outros Arquivos Importantes**  
-- `.gitignore`: Define arquivos ignorados pelo Git.  
-- `index.js`: Arquivo principal da API.  
-- `package.json`: Lista dependências do projeto.  
-- `package-lock.json`: Mantém versões das dependências travadas.  
-
----
-
-## 🚀 Instalação
-
-```sh
-# Clone o repositório
-git clone <URL-DO-REPOSITORIO>
-
-# Instale as dependências
-npm install
-
-# Configure o banco de dados no arquivo src/service/database.js
-
-# Inicie a API
-npm start
+```
+organizations ─┬─< users
+               ├─< products
+               └─< inventories ─< inventoryMovements >─ products
+                                         │
+                                         └─ users (who made the movement)
 ```
 
-------------------------------------------------------------------------------
+## Running locally
 
-# 📦 Stock Control - API (EN-US)
+**Requirements:** Node.js 18+ and a PostgreSQL database.
 
-## 📜 Description
-
-This API was developed to manage product stock control. It allows you to:
-
-- ✅ Create and manage users.  
-- ✅ Manage products.  
-- ✅ Record incoming and outgoing stock movements.  
-- ✅ Separate data by organization (company).  
-
----
-
-## 📁 Project Structure
-
-The project follows a modular structure to ease maintenance and scalability.
-
-### 📂 Main Directories and Files
-
-**`src/api`** - Contains the API controllers.  
-- `inventory.js`: Handles stock-related operations.  
-- `inventoryMovement.js`: Manages product movements.  
-- `organization.js`: Handles company-related data.  
-- `products.js`: Manages product registration and queries.  
-- `user.js`: Manages user registration and authentication.  
-
-**`src/fns`** - Contains reusable utility functions.  
-
-**`src/middleware`** - Contains API middlewares.  
-- `auth.js`: Authentication middleware for secure access.  
-
-**`src/model`** - Defines the data models used in the API.  
-- `inventory.js`: Model for stock data.  
-- `inventoryMovement.js`: Model for stock movements.  
-- `organization.js`: Model for companies.  
-- `products.js`: Model for products.  
-- `user.js`: Model for users.  
-
-**`src/route`** - Defines API routes.  
-- `inventory.js`: Stock routes.  
-- `inventoryMovement.js`: Product movement routes.  
-- `organization.js`: Company routes.  
-- `products.js`: Product routes.  
-- `user.js`: User routes.  
-
-**`src/service`** - Contains API services.  
-- `database.js`: Database configuration and connection.  
-
-**Other Important Files**  
-- `.gitignore`: Defines files ignored by Git.  
-- `index.js`: Main API entry file.  
-- `package.json`: Lists project dependencies.  
-- `package-lock.json`: Locks dependency versions.  
-
----
-
-## 🚀 Installation
-
-```sh
-# Clone the repository
-git clone <REPO-URL>
-
-# Install dependencies
+```bash
+git clone https://github.com/GabRfg/StockControl.git
+cd StockControl
 npm install
-
-# Configure the database in src/service/database.js
-
-# Start the API
-npm start
 ```
 
+Create a `.env` file in the project root:
+
+```env
+DB_DIALECT=postgres
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=stock_control
+DB_USER=postgres
+DB_PASSWORD=your_password
+```
+
+Start the API (tables are created automatically on first run via `sequelize.sync`):
+
+```bash
+npm run dev
+```
+
+The server listens on `http://localhost:3000`.
+
+## API
+
+All routes are prefixed with `/api/v1`. Protected routes expect the JWT in the `Authorization` header.
+
+| Method | Route | Access | Description |
+| --- | --- | --- | --- |
+| POST | `/organization` | public | Create an organization and its admin user |
+| POST | `/login` | public | Returns a JWT |
+| GET / PUT / DELETE | `/organization/:id` | admin | Manage the organization |
+| GET | `/user/info` | any | Current user's profile |
+| PUT / DELETE | `/user` | any | Update or delete own account |
+| GET / POST | `/user` | admin | List / create users in the organization |
+| GET / PUT / DELETE | `/user/:id` | admin | Manage a specific user |
+| GET / POST | `/products` | any | List / create products |
+| GET / PUT / DELETE | `/products/:id` | any | Manage a product |
+| GET / POST | `/inventory` | any | List / create inventories |
+| GET | `/inventory/:id` | any | Inventory details **with current balance per product** |
+| PUT / DELETE | `/inventory/:id` | any | Manage an inventory |
+| GET / POST | `/inventoryMovement/:inventoryId` | any | List / register movements (`type`: `in` or `out`) |
+| GET / PUT / DELETE | `/inventoryMovement/:inventoryId/:id` | any | Manage a movement |
+
+**Example — register a stock entry**
+
+```http
+POST /api/v1/inventoryMovement/1
+Authorization: <token>
+Content-Type: application/json
+
+{ "type": "in", "amount": 50, "productId": 3 }
+```
+
+## Project structure
+
+```
+src/
+├── route/        # Express routers and role checks per endpoint
+├── api/          # Controllers: read the request, call the service, shape the response
+├── service/      # Business rules and validation
+├── model/        # Sequelize models and associations
+├── middleware/   # JWT authentication and role authorization
+├── fns/          # Helpers (balance calculation, password generator)
+└── database.js   # Sequelize connection from environment variables
+```
+
+## Known limitations / roadmap
+
+- [ ] Movement routes and `/organization/:id` do not yet verify that the resource belongs to the caller's organization — tenant check to be enforced in the service layer
+- [ ] JWT secret is hard-coded; move to an environment variable
+- [ ] `amount` accepts any value and `out` movements can make balance negative — add validation
+- [ ] Errors always return HTTP 500; map validation/not-found errors to 400/404
+- [ ] Automated tests (Jest is installed, no tests yet)
+- [ ] Replace `sync()` with migrations
+
+## License
+
+MIT
