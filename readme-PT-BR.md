@@ -1,4 +1,4 @@
-# Stock Control API
+# Controle de Estoque API
 
 [English](README.md) · **Português**
 
